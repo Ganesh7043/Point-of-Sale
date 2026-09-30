@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INKART</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand"><span class="logo">🛒</span> <span id="">INKART</span></div>
+        <div class="user">
+            <span class="badge-role">Billing</span>
+            <span>{{ session.user_name }}</span>
+            <a class="btn ghost sm" href="/logout">Log out</a>
+        </div>
+    </div>
+
+    <div class="layout">
+        <!-- Left: catalogue -->
+        <main class="main" style="flex:1.6">
+            <div class="search-bar" style="margin-bottom:14px">
+                <span class="s-icon">🔍</span>
+                <input id="search" placeholder="Search products…" oninput="loadProducts()" autofocus>
+            </div>
+            <div class="product-grid" id="product-list"></div>
+        </main>
+
+        <!-- Right: cart -->
+        <aside class="cart-panel">
+            <div class="card">
+                <div class="cart-head">
+                    <h2>🛒 Cart</h2>
+                    <button class="btn ghost sm" onclick="clearCart()">Clear</button>
+                </div>
+                <div class="card-body" style="padding-top:8px">
+                    <div id="cart-list"></div>
+
+                    <div class="total-row">
+                        <span>Total</span>
+                        <span class="t-amount" id="cart-total">₹0.00</span>
+                    </div>
+
+                    <label>Customer</label>
+                    <div style="display:flex;gap:7px">
+                        <select class="input" id="customer">
+                            <option value="">Walk-in customer</option>
+                        </select>
+                        <button class="btn outline sm" onclick="addCustomerInline()" title="Add new customer">＋</button>
+                    </div>
+
+                    <label>Payment method</label>
+                    <select class="input" id="payment" onchange="onPaymentChange()">
+                        <option value="cash">💵 Cash</option>
+                        <option value="card">💳 Card</option>
+                        <option value="upi">📱 UPI</option>
+                    </select>
+
+                    <div id="cash-box" style="display:none">
+                        <label>Cash received (₹)</label>
+                        <input class="input" type="number" id="cash-paid" min="0" step="0.01"
+                               oninput="updateChange()">
+                        <div id="change-row" class="muted" style="margin-top:6px;font-size:13.5px"></div>
+                    </div>
+
+                    <button class="btn success block" style="margin-top:16px" onclick="checkout()">
+                        ✓ Complete sale
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- New customer modal -->
+    <div class="modal-backdrop" id="newcustomer-backdrop" onclick="closeModal('newcustomer-modal')"></div>
+    <div class="modal" id="newcustomer-modal">
+        <div class="modal-head">
+            <h3>New customer</h3>
+            <button class="x-close" onclick="closeModal('newcustomer-modal')">×</button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveNewCustomer(event)">
+                <label>Name</label>
+                <input class="input" id="new-cust-name" required>
+                <label>Phone</label>
+                <input class="input" id="new-cust-phone">
+                <div class="modal-foot">
+                    <button type="button" class="btn outline" onclick="closeModal('newcustomer-modal')">Cancel</button>
+                    <button type="submit" class="btn">Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Receipt modal -->
+    <div class="modal-backdrop" id="receipt-backdrop" onclick="closeModal('receipt-modal')"></div>
+    <div class="modal" id="receipt-modal">
+        <div class="modal-head">
+            <h3>Receipt</h3>
+            <button class="x-close" onclick="closeModal('receipt-modal')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="receipt" id="receipt-body"></div>
+            <div class="modal-foot">
+                <button class="btn outline" onclick="closeModal('receipt-modal')">Close</button>
+                <button class="btn" onclick="window.print()">🖨 Print</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toasts"></div>
+
+    <script>
+        let products = [], customers = [], cart = [], settings = {};
+        let lastSale = null;
+
+        /* ---------- helpers ---------- */
+        async function api(url, options) {
+            const res = await fetch(url, options);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Request failed');
+            return data;
+        }
+        const money = n => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const cartTotal = () => cart.reduce((s, i) => s + i.price * i.quantity, 0);
+
+        function toast(msg, type = 'success') {
+            const el = document.createElement('div');
+            el.className = 'toast ' + type;
+            el.textContent = msg;
+            document.getElementById('toasts').appendChild(el);
+            setTimeout(() => el.remove(), 3200);
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+            const bd = document.getElementById(id.replace('-modal', '-backdrop'));
+            if (bd) bd.classList.add('open');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+            const bd = document.getElementById(id.replace('-modal', '-backdrop'));
+            if (bd) bd.classList.remove('open');
+        }
+
+        /* ---------- products ---------- */
+        function productEmoji(name) {
+            const n = name.toLowerCase();
+            if (/milk|paneer|curd|butter|cheese/.test(n)) return '🥛';
+            if (/egg/.test(n)) return '🥚';
+            if (/rice|atta|dal|flour|suji/.test(n)) return '🍚';
+            if (/oil|ghee/.test(n)) return '🫗';
+            if (/sugar|salt/.test(n)) return '🧂';
+            if (/bread|rusk|cake|toast/.test(n)) return '🍞';
+            if (/biscuit|cookie|good day|parle/.test(n)) return '🍪';
+            if (/chips|lay|kurkure|namkeen/.test(n)) return '🥔';
+            if (/noodle|maggi|pasta|macaroni/.test(n)) return '🍜';
+            if (/tea|chai/.test(n)) return '🍵';
+            if (/coffee|nescafe/.test(n)) return '☕';
+            if (/cola|pepsi|soda|mojito/.test(n)) return '🥤';
+            if (/juice|real|fanta/.test(n)) return '🧃';
+            if (/water|bisleri/.test(n)) return '💧';
+            if (/soap|shampoo|conditioner/.test(n)) return '🧼';
+            if (/paste|colgate|brush/.test(n)) return '🪥';
+            if (/handwash|sanitizer|dettol|savlon/.test(n)) return '🧴';
+            if (/detergent|surf|arihant|fabric/.test(n)) return '🧺';
+            if (/dish|vim|pril/.test(n)) return '🧽';
+            if (/cleaner|harpic|lizol|phenyl/.test(n)) return '🧹';
+            if (/tomato/.test(n)) return '🍅';
+            if (/onion/.test(n)) return '🧅';
+            if (/potato/.test(n)) return '🥔';
+            if (/carrot/.test(n)) return '🥕';
+            if (/banana/.test(n)) return '🍌';
+            if (/apple/.test(n)) return '🍎';
+            if (/orange|mosambi/.test(n)) return '🍊';
+            if (/lemon|nimbu/.test(n)) return '🍋';
+            if (/spinach|palak|methi|coriander|leaf/.test(n)) return '🥬';
+            if (/capsicum|pepper/.test(n)) return '🫑';
+            if (/cauliflower|gobi/.test(n)) return '🥦';
+            if (/grape/.test(n)) return '🍇';
+            if (/mango/.test(n)) return '🥭';
+            if (/chocolate|dairy|silk|kitkat|gem/.test(n)) return '🍫';
+            return '🛍️';
+        }
+
+        async function loadProducts() {
+            const q = document.getElementById('search').value.trim();
+            products = await api('/api/billing/products' + (q ? `?q=${encodeURIComponent(q)}` : ''));
+            document.getElementById('product-list').innerHTML = products.map((p, i) => `
+                <div class="product-tile" style="animation-delay:${Math.min(i * 22, 260)}ms" onclick="addToCart(${p.id})">
+                    <div class="p-emoji">${productEmoji(p.name)}</div>
+                    <div class="p-name">${esc(p.name)}</div>
+                    <div class="p-price">${money(p.price)}</div>
+                    <div class="p-stock ${p.stock <= 5 ? 'low' : ''}">${p.stock <= 5 ? '⚠️ ' : ''}Stock: ${p.stock}</div>
+                    <button class="p-add" onclick="event.stopPropagation();addToCart(${p.id})">＋ Add</button>
+                </div>`).join('')
+                || '<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>No products found</div>';
+        }
+
+        /* ---------- customers ---------- */
+        async function loadCustomers() {
+            customers = await api('/api/customers');
+            const sel = document.getElementById('customer');
+            const current = sel.value;
+            sel.innerHTML = '<option value="">Walk-in customer</option>' +
+                customers.map(c => `<option value="${c.id}">${esc(c.name)}${c.phone ? ' · ' + esc(c.phone) : ''}</option>`).join('');
+            sel.value = current;
+        }
+
+        function addCustomerInline() { openModal('newcustomer-modal'); document.getElementById('new-cust-name').focus(); }
+
+        async function saveNewCustomer(e) {
+            e.preventDefault();
+            try {
+                const c = await api('/api/customers', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: document.getElementById('new-cust-name').value,
+                        phone: document.getElementById('new-cust-phone').value,
+                    }) });
+                await loadCustomers();
+                document.getElementById('customer').value = c.id;
+                closeModal('newcustomer-modal');
+                toast('Customer added');
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- cart ---------- */
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            const item = cart.find(i => i.product_id === productId);
+            if (item) {
+                if (item.quantity + 1 > product.stock) { toast('Not enough stock', 'error'); return; }
+                item.quantity += 1;
+            } else {
+                cart.push({ product_id: product.id, name: product.name, price: product.price, quantity: 1 });
+            }
+            renderCart();
+        }
+
+        function changeQty(productId, delta) {
+            const item = cart.find(i => i.product_id === productId);
+            if (!item) return;
+            const product = products.find(p => p.id === productId);
+            item.quantity += delta;
+            if (item.quantity < 1) cart = cart.filter(i => i !== item);
+            else if (product && item.quantity > product.stock) item.quantity = product.stock;
+            renderCart();
+        }
+
+        function clearCart() {
+            if (!cart.length) return;
+            cart = [];
+            renderCart();
+            toast('Cart cleared');
+        }
+
+        function renderCart() {
+            document.getElementById('cart-list').innerHTML = cart.length ? cart.map(i => `
+                <div class="cart-item">
+                    <div>
+                        <div class="c-name">${productEmoji(i.name)} ${esc(i.name)}</div>
+                        <div class="c-sub">${money(i.price)} × ${i.quantity}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span class="qty">
+                            <button onclick="changeQty(${i.product_id}, -1)">−</button>
+                            <span>${i.quantity}</span>
+                            <button onclick="changeQty(${i.product_id}, 1)">+</button>
+                        </span>
+                        <span style="font-weight:700;min-width:64px;text-align:right">${money(i.price * i.quantity)}</span>
+                    </div>
+                </div>`).join('')
+                : '<div class="empty"><div class="big">🛒</div>Cart is empty.<br>Click a product to add it.</div>';
+
+            document.getElementById('cart-total').textContent = money(cartTotal());
+            updateChange();
+        }
+
+        /* ---------- payment & checkout ---------- */
+        function onPaymentChange() {
+            document.getElementById('cash-box').style.display =
+                document.getElementById('payment').value === 'cash' ? 'block' : 'none';
+            updateChange();
+        }
+
+        function updateChange() {
+            const row = document.getElementById('change-row');
+            if (document.getElementById('payment').value !== 'cash') { row.textContent = ''; return; }
+            const paid = parseFloat(document.getElementById('cash-paid').value) || 0;
+            const total = cartTotal();
+            if (!paid) { row.textContent = ''; return; }
+            row.innerHTML = paid < total
+                ? `<span style="color:var(--danger)">Still owed: ${money(total - paid)}</span>`
+                : `Change to give: <strong>${money(paid - total)}</strong>`;
+        }
+
+        async function checkout() {
+            if (!cart.length) { toast('Cart is empty', 'error'); return; }
+
+            const payment = document.getElementById('payment').value;
+            let paid = 0;
+            if (payment === 'cash') {
+                paid = parseFloat(document.getElementById('cash-paid').value) || 0;
+                if (paid && paid < cartTotal()) { toast('Cash received is less than total', 'error'); return; }
+            }
+
+            const btn = document.querySelector('.btn.success');
+            btn.disabled = true;
+            try {
+                const result = await api('/api/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: cart,
+                        customer_id: document.getElementById('customer').value || null,
+                        payment_method: payment,
+                        paid_amount: paid,
+                    }),
+                });
+
+                const custSel = document.getElementById('customer');
+                lastSale = {
+                    invoice_no: result.invoice_no,
+                    total: result.total,
+                    change: result.change_amount,
+                    customer: custSel.selectedOptions[0]?.textContent.split(' · ')[0] || 'Walk-in Customer',
+                    payment,
+                    paid: paid || result.total,
+                    staff: '{{ session.user_name }}',
+                    datetime: new Date().toLocaleString(),
+                    items: cart.map(i => ({ ...i })),
+                };
+
+                cart = [];
+                document.getElementById('cash-paid').value = '';
+                renderCart();
+                showReceipt();
+                loadProducts();
+            } catch (e) {
+                toast(e.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function showReceipt() {
+            const s = lastSale;
+            const payLabel = { cash: 'Cash', card: 'Card', upi: 'UPI' }[s.payment] || s.payment;
+            const shop = settings.shop_name || 'SIMPLE POS';
+            document.getElementById('receipt-body').innerHTML = `
+                <div class="r-head">
+                    <div class="r-store">${esc(shop.toUpperCase())}</div>
+                    ${settings.shop_address ? `<div>${esc(settings.shop_address)}</div>` : ''}
+                    ${settings.shop_phone ? `<div>Ph: ${esc(settings.shop_phone)}</div>` : ''}
+                    <div style="margin-top:4px">Thank you for shopping with us!</div>
+                </div>
+                <hr>
+                <div class="r-meta"><span>Invoice</span><span>${esc(s.invoice_no)}</span></div>
+                <div class="r-meta"><span>Date</span><span>${esc(s.datetime)}</span></div>
+                <div class="r-meta"><span>Customer</span><span>${esc(s.customer)}</span></div>
+                <div class="r-meta"><span>Served by</span><span>${esc(s.staff)}</span></div>
+                <hr>
+                ${s.items.map(i => `
+                    <div class="r-line">
+                        <span>${esc(i.name)} <span class="r-qty">× ${i.quantity}</span></span>
+                        <span>${money(i.price * i.quantity)}</span>
+                    </div>`).join('')}
+                <hr>
+                <div class="r-total"><span>TOTAL</span><span>${money(s.total)}</span></div>
+                <div class="r-meta"><span>Payment</span><span>${payLabel}</span></div>
+                <div class="r-meta"><span>Paid</span><span>${money(s.paid)}</span></div>
+                ${s.change ? `<div class="r-meta"><span>Change</span><span>${money(s.change)}</span></div>` : ''}
+                <hr>
+                <div class="r-foot">Goods once sold are non-returnable.</div>`;
+            openModal('receipt-modal');
+        }
+
+        /* ---------- boot ---------- */
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { closeModal('receipt-modal'); closeModal('newcustomer-modal'); }
+        });
+
+        (async () => {
+            try {
+                settings = await api('/api/settings');
+                document.getElementById('brand-name').textContent = settings.shop_name || 'Simple POS';
+            } catch (e) { /* non-admin can't read settings; use defaults */ }
+            await Promise.all([loadProducts(), loadCustomers()]);
+            renderCart();
+        })();
+    </script>
+</body>
+</html>

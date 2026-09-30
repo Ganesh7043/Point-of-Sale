@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INKART</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="login-page">
+        <!-- Left: brand hero -->
+        <div class="login-hero">
+            <div class="lh-logo">🛒</div>
+            <h1>INKART</h1>
+            <p>Fast, reliable billing and inventory for your supermarket — sales, stock, staff and reports in one place.</p>
+            <div class="lh-points">
+                <span>⚡ One-click billing with instant receipts</span>
+                <span>📦 Live stock tracking on every sale</span>
+                <span>📈 Daily &amp; monthly sales reports</span>
+                <span>👥 Customers and staff management</span>
+            </div>
+        </div>
+
+        <!-- Right: form -->
+        <div class="login-form-side">
+            <div class="login-card">
+                <h2>Welcome back</h2>
+                <p class="sub">Sign in to continue to your store</p>
+
+                {% if error %}
+                <div class="alert">⚠️ {{ error }}</div>
+                {% endif %}
+
+                <form method="post" action="/login">
+                    <label>Username</label>
+                    <input class="input" type="text" name="username" placeholder="e.g. admin" required autofocus>
+                    <label>Password</label>
+                    <input class="input" type="password" name="password" placeholder="••••••••" required>
+                    <button class="btn block" style="margin-top:18px">Sign in →</button>
+                </form>
+
+                <div class="demo-creds">
+                    <span>Admin: <code>admin / admin123</code></span>
+                    <span>Staff: <code>staff1 / staff123</code></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

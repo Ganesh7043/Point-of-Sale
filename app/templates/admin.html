@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — INKART</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand"><span class="logo">🛒</span> <span id="brand-name">INKART</span></div>
+        <div class="user">
+            <span class="badge-role">Admin</span>
+            <span>{{ session.user_name }}</span>
+            <a class="btn ghost sm" href="/logout">Log out</a>
+        </div>
+    </div>
+
+    <div class="layout">
+        <nav class="sidebar">
+            <div class="side-title">Menu</div>
+            <button class="nav-item active" data-view="dashboard" onclick="showView('dashboard')">📊 Dashboard</button>
+            <button class="nav-item" data-view="products" onclick="showView('products')">📦 Products</button>
+            <button class="nav-item" data-view="sales" onclick="showView('sales')">🧾 Sales</button>
+            <button class="nav-item" data-view="customers" onclick="showView('customers')">👥 Customers</button>
+            <button class="nav-item" data-view="staff" onclick="showView('staff')">🧑‍💼 Staff</button>
+            <button class="nav-item" data-view="reports" onclick="showView('reports')">📈 Reports</button>
+            <button class="nav-item" data-view="settings" onclick="showView('settings')">⚙️ Settings</button>
+            <div style="flex:1"></div>
+            <div class="side-title">Quick</div>
+            <button class="nav-item" onclick="location.href='/billing'">💰 Open Billing</button>
+        </nav>
+
+        <main class="main">
+            <!-- Dashboard -->
+            <section class="view active" id="view-dashboard">
+                <div class="page-hero">
+                    <div>
+                        <h1 id="greeting">Welcome back 👋</h1>
+                        <p>Here's what's happening in your store today.</p>
+                    </div>
+                    <button class="btn" onclick="location.href='/billing'">💰 New sale</button>
+                </div>
+                <div class="stats">
+                    <div class="stat blue"><div class="icon">📦</div><div><div class="label">Products</div><div class="value" id="stat-products">–</div></div></div>
+                    <div class="stat green"><div class="icon">🧾</div><div><div class="label">Sales today</div><div class="value" id="stat-sales">–</div></div></div>
+                    <div class="stat violet"><div class="icon">₹</div><div><div class="label">Revenue today</div><div class="value" id="stat-revenue">–</div></div></div>
+                    <div class="stat amber"><div class="icon">⚠️</div><div><div class="label">Low stock</div><div class="value" id="stat-low">–</div></div></div>
+                    <div class="stat blue"><div class="icon">👥</div><div><div class="label">Customers</div><div class="value" id="stat-customers">–</div></div></div>
+                    <div class="stat red"><div class="icon">↩️</div><div><div class="label">Refunds (7d)</div><div class="value" id="stat-refunds">–</div></div></div>
+                </div>
+                <div class="card" style="margin-top:16px">
+                    <div class="card-head"><h2>🏆 Best sellers (units sold)</h2></div>
+                    <div class="card-body" id="bestsellers">Loading…</div>
+                </div>
+            </section>
+
+            <!-- Products -->
+            <section class="view" id="view-products">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Products</h2>
+                        <button class="btn sm" onclick="openProductModal()">＋ Add product</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>#</th><th>Name</th><th class="num">Price</th><th class="num">Stock</th><th>Status</th><th></th></tr></thead>
+                            <tbody id="products-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Sales -->
+            <section class="view" id="view-sales">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Sales history</h2>
+                        <input class="input input-sm" id="sale-search" placeholder="Search invoice / customer…" oninput="renderSales()">
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Invoice</th><th>Customer</th><th>Staff</th><th class="num">Items</th><th class="num">Total</th><th>Status</th><th>Date</th><th></th></tr></thead>
+                            <tbody id="sales-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customers -->
+            <section class="view" id="view-customers">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Customers</h2>
+                        <button class="btn sm" onclick="openCustomerModal()">＋ Add customer</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>#</th><th>Name</th><th>Phone</th><th class="num">Purchases</th><th></th></tr></thead>
+                            <tbody id="customers-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Staff -->
+            <section class="view" id="view-staff">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Staff accounts</h2>
+                        <button class="btn sm" onclick="openStaffModal()">＋ Add staff</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th></th></tr></thead>
+                            <tbody id="staff-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports -->
+            <section class="view" id="view-reports">
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Sales report</h2>
+                        <div style="display:flex;gap:8px">
+                            <select class="input input-sm" id="report-days" onchange="loadReport()">
+                                <option value="1">Today</option>
+                                <option value="7" selected>Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                            <a class="btn outline sm" href="/api/reports/csv" id="csv-link">⬇ CSV</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats" id="report-stats"></div>
+                        <h3 style="margin:20px 0 10px;font-size:14px">Revenue by day</h3>
+                        <div id="report-bars"></div>
+                        <h3 style="margin:20px 0 10px;font-size:14px">Top products</h3>
+                        <div id="report-top"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="view" id="view-settings">
+                <div class="card" style="max-width:480px">
+                    <div class="card-head"><h2>Shop settings</h2></div>
+                    <div class="card-body">
+                        <form onsubmit="saveSettings(event)">
+                            <label>Shop name (shown on receipts)</label>
+                            <input class="input" id="set-name">
+                            <label>Address (optional)</label>
+                            <input class="input" id="set-address">
+                            <label>Phone (optional)</label>
+                            <input class="input" id="set-phone">
+                            <button class="btn" style="margin-top:16px">Save settings</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Product modal -->
+    <div class="modal-backdrop" id="backdrop" onclick="closeModal('product-modal')"></div>
+    <div class="modal" id="product-modal">
+        <div class="modal-head">
+            <h3 id="product-modal-title">Add product</h3>
+            <button class="x-close" onclick="closeModal('product-modal')">×</button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveProduct(event)">
+                <input type="hidden" id="product-id">
+                <label>Name</label>
+                <input class="input" id="product-name" required>
+                <label>Price (₹)</label>
+                <input class="input" type="number" id="product-price" min="0" step="0.01" required>
+                <label>Stock quantity</label>
+                <input class="input" type="number" id="product-stock" min="0" required>
+                <div class="modal-foot">
+                    <button type="button" class="btn outline" onclick="closeModal('product-modal')">Cancel</button>
+                    <button type="submit" class="btn">Save product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Customer modal -->
+    <div class="modal-backdrop" id="customer-backdrop" onclick="closeModal('customer-modal')"></div>
+    <div class="modal" id="customer-modal">
+        <div class="modal-head">
+            <h3 id="customer-modal-title">Add customer</h3>
+            <button class="x-close" onclick="closeModal('customer-modal')">×</button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveCustomer(event)">
+                <input type="hidden" id="customer-id">
+                <label>Name</label>
+                <input class="input" id="customer-name" required>
+                <label>Phone</label>
+                <input class="input" id="customer-phone">
+                <div class="modal-foot">
+                    <button type="button" class="btn outline" onclick="closeModal('customer-modal')">Cancel</button>
+                    <button type="submit" class="btn">Save customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Staff modal -->
+    <div class="modal-backdrop" id="staff-backdrop" onclick="closeModal('staff-modal')"></div>
+    <div class="modal" id="staff-modal">
+        <div class="modal-head">
+            <h3 id="staff-modal-title">Add staff</h3>
+            <button class="x-close" onclick="closeModal('staff-modal')">×</button>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="saveStaff(event)">
+                <input type="hidden" id="staff-id">
+                <label>Full name</label>
+                <input class="input" id="staff-name" required>
+                <label>Username</label>
+                <input class="input" id="staff-username" required>
+                <label>Role</label>
+                <select class="input" id="staff-role">
+                    <option value="staff">Staff (billing only)</option>
+                    <option value="admin">Admin (full access)</option>
+                </select>
+                <label>Password <span class="muted" id="staff-pw-hint" style="display:none">(leave blank to keep current)</span></label>
+                <input class="input" type="password" id="staff-password">
+                <div class="modal-foot">
+                    <button type="button" class="btn outline" onclick="closeModal('staff-modal')">Cancel</button>
+                    <button type="submit" class="btn">Save staff</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sale detail / returns modal -->
+    <div class="modal-backdrop" id="sale-backdrop" onclick="closeModal('sale-modal')"></div>
+    <div class="modal" id="sale-modal" style="max-width:520px">
+        <div class="modal-head">
+            <h3 id="sale-modal-title">Sale</h3>
+            <button class="x-close" onclick="closeModal('sale-modal')">×</button>
+        </div>
+        <div class="modal-body" id="sale-modal-body"></div>
+    </div>
+
+    <div id="toasts"></div>
+
+    <script>
+        let products = [], sales = [], customers = [], staff = [];
+
+        /* ---------- helpers ---------- */
+        async function api(url, options) {
+            const res = await fetch(url, options);
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Request failed');
+            return data;
+        }
+        const money = n => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const todayStr = () => new Date().toLocaleDateString('en-CA');
+
+        function toast(msg, type = 'success') {
+            const el = document.createElement('div');
+            el.className = 'toast ' + type;
+            el.textContent = msg;
+            document.getElementById('toasts').appendChild(el);
+            setTimeout(() => el.remove(), 3200);
+        }
+
+        function showView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + name).classList.add('active');
+            document.querySelectorAll('.nav-item[data-view]').forEach(b =>
+                b.classList.toggle('active', b.dataset.view === name));
+        }
+
+        function openModal(id) {
+            document.getElementById(id).classList.add('open');
+            const bd = document.getElementById(id.replace('-modal', '-backdrop'));
+            if (bd) bd.classList.add('open');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+            const bd = document.getElementById(id.replace('-modal', '-backdrop'));
+            if (bd) bd.classList.remove('open');
+        }
+
+        const statusPill = s => {
+            const cls = s === 'completed' ? 'green' : 'red';
+            return `<span class="pill ${cls}">${esc(s)}</span>`;
+        };
+        const stockPill = st => st <= 0 ? '<span class="pill red">Out of stock</span>'
+            : st <= 5 ? `<span class="pill amber">Low · ${st}</span>`
+            : `<span class="pill green">In stock · ${st}</span>`;
+
+        /* ---------- dashboard ---------- */
+        async function loadDashboard() {
+            [products, sales, customers] = await Promise.all([
+                api('/api/products'), api('/api/sales'), api('/api/customers')]);
+
+            const today = todayStr();
+            const todaySales = sales.filter(s => (s.created_at || '').slice(0, 10) === today);
+            const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+            const refunds7d = sales.reduce((n, s) => n + (s.returns || []).filter(r => (r.created_at || '').slice(0, 10) >= weekAgo).length, 0);
+
+            document.getElementById('stat-products').textContent = products.length;
+            document.getElementById('stat-sales').textContent = todaySales.length;
+            document.getElementById('stat-revenue').textContent = money(todaySales.reduce((s, x) => s + x.total, 0));
+            document.getElementById('stat-low').textContent = products.filter(p => p.stock <= 5).length;
+            document.getElementById('stat-customers').textContent = customers.length;
+            document.getElementById('stat-refunds').textContent = refunds7d;
+
+            const unitMap = {};
+            sales.forEach(s => (s.items || []).forEach(i =>
+                unitMap[i.product_name] = (unitMap[i.product_name] || 0) + i.quantity));
+            const ranked = Object.entries(unitMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const maxU = ranked.length ? ranked[0][1] : 0;
+            document.getElementById('bestsellers').innerHTML = ranked.length
+                ? ranked.map(([name, u], idx) => `
+                    <div class="bar-row">
+                        <div class="bar-label" style="width:auto;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${['🥇','🥈','🥉','4.','5.'][idx]} ${esc(name)}</div>
+                        <div class="bar-track" style="max-width:340px"><div class="bar-fill green" style="width:${maxU ? u / maxU * 100 : 0}%"></div></div>
+                        <div class="bar-value" style="min-width:56px">${u} units</div>
+                    </div>`).join('')
+                : '<div class="empty"><div class="big">🏆</div>No sales yet — best sellers will appear here.</div>';
+        }
+
+        /* ---------- products ---------- */
+        function renderProducts() {
+            document.getElementById('products-body').innerHTML = products.map((p, i) => `
+                <tr>
+                    <td class="muted">${i + 1}</td>
+                    <td style="font-weight:600">${esc(p.name)}</td>
+                    <td class="num">${money(p.price)}</td>
+                    <td class="num">${p.stock}</td>
+                    <td>${stockPill(p.stock)}</td>
+                    <td class="num" style="white-space:nowrap">
+                        <button class="btn outline sm" onclick='editProduct(${JSON.stringify(p)})'>Edit</button>
+                        <button class="btn danger sm" onclick="deleteProduct(${p.id})">Delete</button>
+                    </td>
+                </tr>`).join('')
+                || '<tr><td colspan="6"><div class="empty">No products yet — add your first one.</div></td></tr>';
+        }
+
+        function openProductModal(p) {
+            document.getElementById('product-modal-title').textContent = p ? 'Edit product' : 'Add product';
+            document.getElementById('product-id').value = p ? p.id : '';
+            document.getElementById('product-name').value = p ? p.name : '';
+            document.getElementById('product-price').value = p ? p.price : '';
+            document.getElementById('product-stock').value = p ? p.stock : '';
+            openModal('product-modal');
+            document.getElementById('product-name').focus();
+        }
+        function editProduct(p) { openProductModal(p); }
+
+        async function saveProduct(e) {
+            e.preventDefault();
+            const id = document.getElementById('product-id').value;
+            const body = {
+                name: document.getElementById('product-name').value,
+                price: parseFloat(document.getElementById('product-price').value),
+                stock: parseInt(document.getElementById('product-stock').value),
+            };
+            try {
+                await api(id ? `/api/products/${id}` : '/api/products', {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                closeModal('product-modal');
+                toast(id ? 'Product updated' : 'Product added');
+                loadAll();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('Delete this product?')) return;
+            try { await api(`/api/products/${id}`, { method: 'DELETE' }); toast('Product deleted'); loadAll(); }
+            catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- sales ---------- */
+        function renderSales() {
+            const q = document.getElementById('sale-search').value.trim().toLowerCase();
+            const rows = sales.filter(s =>
+                !q || s.invoice_no.toLowerCase().includes(q) || (s.customer_name || '').toLowerCase().includes(q));
+            document.getElementById('sales-body').innerHTML = rows.map(s => `
+                <tr>
+                    <td style="font-weight:600">${esc(s.invoice_no)}</td>
+                    <td>${esc(s.customer_name || 'Walk-in')}</td>
+                    <td>${esc(s.staff_name)}</td>
+                    <td class="num">${s.item_count}</td>
+                    <td class="num" style="font-weight:600">${money(s.total)}</td>
+                    <td>${statusPill(s.status)}</td>
+                    <td class="muted">${esc(s.created_at || '')}</td>
+                    <td class="num"><button class="btn outline sm" onclick="openSale(${s.id})">View</button></td>
+                </tr>`).join('')
+                || '<tr><td colspan="8"><div class="empty">No sales found.</div></td></tr>';
+        }
+
+        async function openSale(tid) {
+            try {
+                const s = await api(`/api/sales/${tid}`);
+                document.getElementById('sale-modal-title').textContent = `Sale ${s.invoice_no}`;
+                document.getElementById('sale-modal-body').innerHTML = `
+                    <p class="muted" style="font-size:13px">
+                        ${esc(s.created_at)} · Served by ${esc(s.staff_name)} · ${esc(s.customer_name || 'Walk-in')}
+                        ${statusPill(s.status)}
+                    </p>
+                    <table style="margin-top:8px">
+                        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Refunded</th></tr></thead>
+                        <tbody>
+                            ${s.items.map(i => `
+                                <tr>
+                                    <td>${esc(i.product_name)}</td>
+                                    <td class="num">${i.quantity}</td>
+                                    <td class="num">${money(i.price)}</td>
+                                    <td class="num">${i.quantity_returned ? `${i.quantity_returned}/${i.quantity}` : '—'}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>
+                    <div style="display:flex;justify-content:space-between;margin-top:12px;font-weight:700">
+                        <span>Total</span><span>${money(s.total)}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)">
+                        <span>Paid (${esc(s.payment_method)})</span><span>${money(s.paid_amount)}</span>
+                    </div>
+                    ${s.change_amount ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted)"><span>Change given</span><span>${money(s.change_amount)}</span></div>` : ''}
+                    ${(s.returns || []).length ? `
+                        <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)">
+                            <strong style="font-size:13px">Refunds</strong>
+                            ${s.returns.map(r => `<div class="muted" style="font-size:13px">${esc(r.created_at)} — ${money(r.refund_total)} (${esc(r.staff_name)})</div>`).join('')}
+                        </div>` : ''}
+                    <div class="modal-foot">
+                        <button class="btn outline" onclick="closeModal('sale-modal')">Close</button>
+                        ${s.status === 'completed' ? `<button class="btn danger" onclick="returnSale(${s.id})">↩ Return items</button>` : ''}
+                    </div>`;
+                openModal('sale-modal');
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        async function returnSale(tid) {
+            if (!confirm('Return ALL items of this sale and refund the full amount?')) return;
+            closeModal('sale-modal');
+            try {
+                const sale = await api(`/api/sales/${tid}`);
+                const items = sale.items
+                    .filter(i => i.quantity > (i.quantity_returned || 0))
+                    .map(i => ({ item_id: i.id, quantity: i.quantity - (i.quantity_returned || 0) }));
+                const res = await api('/api/returns', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transaction_id: tid, items }) });
+                toast(`Refunded ${money(res.refund_total)}`);
+                loadAll();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- customers ---------- */
+        function renderCustomers() {
+            document.getElementById('customers-body').innerHTML = customers.map((c, i) => {
+                const spent = sales.filter(s => s.customer_id === c.id && s.status !== 'returned')
+                    .reduce((n, s) => n + s.total, 0);
+                return `
+                <tr>
+                    <td class="muted">${i + 1}</td>
+                    <td style="font-weight:600">${esc(c.name)}</td>
+                    <td>${esc(c.phone || '—')}</td>
+                    <td class="num">${spent ? money(spent) : '—'}</td>
+                    <td class="num" style="white-space:nowrap">
+                        <button class="btn outline sm" onclick='editCustomer(${JSON.stringify(c)})'>Edit</button>
+                        <button class="btn danger sm" onclick="deleteCustomer(${c.id})">Delete</button>
+                    </td>
+                </tr>`;
+            }).join('')
+                || '<tr><td colspan="5"><div class="empty">No customers yet.</div></td></tr>';
+        }
+
+        function openCustomerModal(c) {
+            document.getElementById('customer-modal-title').textContent = c ? 'Edit customer' : 'Add customer';
+            document.getElementById('customer-id').value = c ? c.id : '';
+            document.getElementById('customer-name').value = c ? c.name : '';
+            document.getElementById('customer-phone').value = c ? (c.phone || '') : '';
+            openModal('customer-modal');
+        }
+        function editCustomer(c) { openCustomerModal(c); }
+
+        async function saveCustomer(e) {
+            e.preventDefault();
+            const id = document.getElementById('customer-id').value;
+            const body = {
+                name: document.getElementById('customer-name').value,
+                phone: document.getElementById('customer-phone').value,
+            };
+            try {
+                await api(id ? `/api/customers/${id}` : '/api/customers', {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                closeModal('customer-modal');
+                toast(id ? 'Customer updated' : 'Customer added');
+                loadAll();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        async function deleteCustomer(id) {
+            if (!confirm('Delete this customer?')) return;
+            try { await api(`/api/customers/${id}`, { method: 'DELETE' }); toast('Customer deleted'); loadAll(); }
+            catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- staff ---------- */
+        async function loadStaff() {
+            staff = await api('/api/staff');
+        }
+
+        function renderStaff() {
+            document.getElementById('staff-body').innerHTML = staff.map((u, i) => `
+                <tr>
+                    <td class="muted">${i + 1}</td>
+                    <td style="font-weight:600">${esc(u.full_name)}${u.id === {{ session.user_id }} ? ' <span class="pill green">You</span>' : ''}</td>
+                    <td>${esc(u.username)}</td>
+                    <td><span class="pill ${u.role === 'admin' ? 'green' : ''}" ${u.role !== 'admin' ? 'style="background:var(--bg);color:var(--muted)"' : ''}>${esc(u.role)}</span></td>
+                    <td class="num" style="white-space:nowrap">
+                        <button class="btn outline sm" onclick='editStaff(${JSON.stringify(u)})'>Edit</button>
+                        ${u.id !== {{ session.user_id }} ? `<button class="btn danger sm" onclick="deleteStaff(${u.id})">Delete</button>` : ''}
+                    </td>
+                </tr>`).join('');
+        }
+
+        function openStaffModal(u) {
+            document.getElementById('staff-modal-title').textContent = u ? 'Edit staff' : 'Add staff';
+            document.getElementById('staff-id').value = u ? u.id : '';
+            document.getElementById('staff-name').value = u ? u.full_name : '';
+            document.getElementById('staff-username').value = u ? u.username : '';
+            document.getElementById('staff-username').disabled = !!u;
+            document.getElementById('staff-role').value = u ? u.role : 'staff';
+            document.getElementById('staff-password').value = '';
+            document.getElementById('staff-pw-hint').style.display = u ? 'inline' : 'none';
+            document.getElementById('staff-password').required = !u;
+            openModal('staff-modal');
+        }
+        function editStaff(u) { openStaffModal(u); }
+
+        async function saveStaff(e) {
+            e.preventDefault();
+            const id = document.getElementById('staff-id').value;
+            const body = {
+                full_name: document.getElementById('staff-name').value,
+                username: document.getElementById('staff-username').value,
+                role: document.getElementById('staff-role').value,
+                password: document.getElementById('staff-password').value,
+            };
+            try {
+                if (id) {
+                    delete body.username;
+                    await api(`/api/staff/${id}`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                } else {
+                    await api('/api/staff', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                }
+                closeModal('staff-modal');
+                toast(id ? 'Staff updated' : 'Staff added');
+                loadAll();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        async function deleteStaff(id) {
+            if (!confirm('Delete this staff account?')) return;
+            try { await api(`/api/staff/${id}`, { method: 'DELETE' }); toast('Staff deleted'); loadAll(); }
+            catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- reports ---------- */
+        async function loadReport() {
+            const days = document.getElementById('report-days').value;
+            document.getElementById('csv-link').href = `/api/reports/csv?days=${days}`;
+            try {
+                const r = await api(`/api/reports?days=${days}`);
+                document.getElementById('report-stats').innerHTML = `
+                    <div class="stat green"><div class="icon">🧾</div><div><div class="label">Sales</div><div class="value">${r.count}</div></div></div>
+                    <div class="stat violet"><div class="icon">₹</div><div><div class="label">Revenue</div><div class="value">${money(r.revenue)}</div></div></div>
+                    <div class="stat blue"><div class="icon">📊</div><div><div class="label">Avg sale</div><div class="value">${money(r.avg_sale)}</div></div></div>
+                    <div class="stat red"><div class="icon">↩️</div><div><div class="label">Refunded</div><div class="value">${money(r.returns_total)}</div></div></div>`;
+
+                const maxRev = Math.max(...r.sales.map(s => s.revenue || 0), 0);
+                document.getElementById('report-bars').innerHTML = r.sales.length
+                    ? r.sales.map(s => `
+                        <div class="bar-row">
+                            <div class="bar-label">${esc(s.day)}</div>
+                            <div class="bar-track"><div class="bar-fill" style="width:${maxRev ? (s.revenue / maxRev * 100) : 0}%"></div></div>
+                            <div class="bar-value">${money(s.revenue)}</div>
+                        </div>`).join('')
+                    : '<div class="empty"><div class="big">📉</div>No sales in this period.</div>';
+
+                const maxU = Math.max(...r.top.map(t => t.units || 0), 0);
+                document.getElementById('report-top').innerHTML = r.top.length
+                    ? r.top.map(t => `
+                        <div class="bar-row">
+                            <div class="bar-label" style="width:auto;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.product_name)}</div>
+                            <div class="bar-track" style="max-width:300px"><div class="bar-fill" style="width:${maxU ? (t.units / maxU * 100) : 0}%"></div></div>
+                            <div class="bar-value">${t.units} units · ${money(t.revenue)}</div>
+                        </div>`).join('')
+                    : '<div class="empty"><div class="big">📦</div>No product sales in this period.</div>';
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- settings ---------- */
+        async function loadSettings() {
+            const s = await api('/api/settings');
+            document.getElementById('brand-name').textContent = s.shop_name || 'Simple POS';
+            document.getElementById('set-name').value = s.shop_name || '';
+            document.getElementById('set-address').value = s.shop_address || '';
+            document.getElementById('set-phone').value = s.shop_phone || '';
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            try {
+                const s = await api('/api/settings', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shop_name: document.getElementById('set-name').value,
+                        shop_address: document.getElementById('set-address').value,
+                        shop_phone: document.getElementById('set-phone').value,
+                    }) });
+                document.getElementById('brand-name').textContent = s.shop_name || 'Simple POS';
+                toast('Settings saved');
+            } catch (err) { toast(err.message, 'error'); }
+        }
+
+        /* ---------- greeting ---------- */
+        (function greet() {
+            const h = new Date().getHours();
+            const word = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+            document.getElementById('greeting').textContent = `${word}, {{ session.user_name }} 👋`;
+        })();
+
+        /* ---------- boot ---------- */
+        async function loadAll() {
+            try {
+                await Promise.all([loadDashboard(), loadStaff()]);
+                renderProducts();
+                renderSales();
+                renderCustomers();
+                renderStaff();
+            } catch (err) { toast(err.message, 'error'); }
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') {
+            ['product-modal', 'customer-modal', 'staff-modal', 'sale-modal'].forEach(closeModal); } });
+
+        loadAll();
+        loadReport();
+        loadSettings();
+    </script>
+</body>
+</html>
